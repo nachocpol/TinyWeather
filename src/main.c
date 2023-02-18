@@ -1,8 +1,7 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 
+#include "Core.h"
 #include "I2C.h"
 #include "BME680.h"
 
@@ -25,7 +24,9 @@ void Initialize()
 {
     // Flush log
     ESP_LOGI(k_LogTag, "\n \n"); 
-    vTaskDelay(3500 / portTICK_PERIOD_MS);
+
+    DelayMS(5000);
+    
     ESP_LOGI(k_LogTag, "Initializing firmware. Current version is: %s", k_FirmwareVersion);
     
     // Led pin
@@ -48,17 +49,15 @@ void Initialize()
 void Update()
 {
     gpio_set_level(GPIO_NUM_18, 1);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    DelayMS(500);
     gpio_set_level(GPIO_NUM_18, 0);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    DelayMS(500);
 
-    uint8_t chipId = 0;
-    if(I2C_ReadData(0x77, 0xD0, &chipId, 1))
-    {
-        ESP_LOGI(k_LogTag, "Got bm id");
-    }
-    else
-    {
-        ESP_LOGI(k_LogTag, "Failed to get bm id");
-    }
+    BME680Data bmeData;
+    BME680_Sample(&bmeData);
+
+    ESP_LOGI(k_LogTag, "Temperature: %f (C) Humidity: %f Pressure: %f (Pa)",
+            bmeData.m_Temperature,bmeData.m_Humidity, bmeData.m_Pressure
+    );
+
 }

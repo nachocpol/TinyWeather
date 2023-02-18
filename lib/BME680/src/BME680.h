@@ -18,9 +18,18 @@ typedef struct
 {
     BME680Config m_Config;
     bool m_Initialized;
+    void* m_Impl;
 } BME680Instance;
 
+typedef struct 
+{
+    float m_Temperature;
+    float m_Humidity;
+    float m_Pressure;   
+} BME680Data;
 
 bool BME680_Initialize(BME680Config* config);
+
+bool BME680_Sample(BME680Data* output);
 
 #endif

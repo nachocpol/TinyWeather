@@ -2,6 +2,7 @@
     "files.associations": {
         "freertos.h": "c",
         "i2c.h": "c",
-        "gpio.h": "c"
+        "gpio.h": "c",
+        "bme68x_defs.h": "c"
     }
 }
