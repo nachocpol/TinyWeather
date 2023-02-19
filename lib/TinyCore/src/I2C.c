@@ -67,7 +67,6 @@ bool I2C_ReadData(uint8_t slaveAddr, uint8_t slaveRegister, uint8_t* data, uint8
         result = i2c_master_write_byte(cmdList, FormatRW(slaveAddr, true), I2C_MASTER_ACK);
         result = i2c_master_write_byte(cmdList, slaveRegister, I2C_MASTER_ACK);
     }
-    // TODO: Some chips seem to  want a stop here?? Maybe need to check with other modules to be sure
     // Body
     {
         result = i2c_master_start(cmdList);
@@ -102,13 +101,14 @@ bool I2C_WriteData(uint8_t slaveAddr, uint8_t slaveRegister, uint8_t* data, uint
     }
     // Body
     {
+        result = i2c_master_write_byte(cmdList, slaveRegister, I2C_MASTER_ACK); // First part to write
         for(uint8_t i = 0; i < dataSize; ++i)
         {
-            result = i2c_master_write_byte(cmdList, data[i], I2C_MASTER_ACK);
+            result = i2c_master_write_byte(cmdList, data[i], I2C_MASTER_ACK); // Write all the rest 
         }
         result = i2c_master_stop(cmdList);
     }
-    result = i2c_master_cmd_begin(0, cmdList, 500 / portTICK_PERIOD_MS);
+    result = i2c_master_cmd_begin(0, cmdList, 1000 / portTICK_PERIOD_MS);
     i2c_cmd_link_delete(cmdList);
 
     return true;

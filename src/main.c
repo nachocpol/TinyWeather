@@ -35,14 +35,19 @@ void Initialize()
     I2C_Initialize(NULL);
 
     // Setup the BME
-    BME680Config bmeConfig = {
+    BME680InitSettings bmeConfig = {
         .m_Addr = 0x77,
         .m_I2CRead = &I2C_ReadData,
         .m_I2CWrite = &I2C_WriteData
     };
+
     if(!BME680_Initialize(&bmeConfig))
     {
-        ESP_LOGI(k_LogTag, "Failed to initialize the BME680");
+        while(true)
+        {
+            ESP_LOGI(k_LogTag, "Failed to initialize the BME680");
+            DelayMS(2000);
+        }
     }
 }
 
@@ -54,10 +59,15 @@ void Update()
     DelayMS(500);
 
     BME680Data bmeData;
-    BME680_Sample(&bmeData);
-
-    ESP_LOGI(k_LogTag, "Temperature: %f (C) Humidity: %f Pressure: %f (Pa)",
-            bmeData.m_Temperature,bmeData.m_Humidity, bmeData.m_Pressure
-    );
-
+    if(!BME680_Sample(&bmeData))
+    {
+        ESP_LOGI(k_LogTag, "Failed to sample the BME...");
+    }
+    else
+    {
+        ESP_LOGI(k_LogTag, 
+                "Temperature: %f (C) Humidity: %f Pressure: %f (Pa)",
+                bmeData.m_Temperature,bmeData.m_Humidity, bmeData.m_Pressure
+        );
+    }
 }

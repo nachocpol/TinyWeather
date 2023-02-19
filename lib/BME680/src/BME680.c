@@ -1,13 +1,30 @@
 #include "BME680.h"
+#include "Core.h"
+
 #include "bme68x_defs.h"
 #include "bme68x.h"
 
-#include "Core.h"
-
 #include "string.h"
 
-BME680Instance g_Instance = {
+typedef struct
+{
+    BME680InitSettings m_Config;
+    bool m_Initialized;
+    struct bme68x_dev* m_Impl;
+    uint32_t m_SampleDelay;
+} BME680Instance;
+
+static BME680Instance g_Instance = {
     .m_Initialized = false
+};
+
+static BME680SamplingSettings g_DefaultSampling = {
+    .m_HeaterEnabled = true,
+    .m_HeaterDuration = 100,
+    .m_HeaterTemperature = 300,
+    .m_PressureOS = OS_4X,
+    .m_TemperatureOS = OS_4X,
+    .m_HumidityOS = OS_4X,
 };
 
 BME68X_INTF_RET_TYPE BMERead(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void* intf_ptr)
@@ -29,7 +46,7 @@ void BMEDelay(uint32_t period, void *intf_ptr)
     DelayUS(period);
 }
 
-bool BME680_Initialize(BME680Config* config)
+bool BME680_Initialize(BME680InitSettings* config)
 {
     if(g_Instance.m_Initialized)
     {
@@ -38,70 +55,97 @@ bool BME680_Initialize(BME680Config* config)
     
     // Init the instance
     g_Instance.m_Impl = malloc(sizeof(struct bme68x_dev));
-    memcpy(&g_Instance.m_Config, config, sizeof(BME680Config));
+    memcpy(&g_Instance.m_Config, config, sizeof(BME680InitSettings));
 
     // Prepare the BME implementation settings
-    struct bme68x_dev* bme = (struct bme68x_dev*)g_Instance.m_Impl;
-    bme->read = &BMERead;
-    bme->write = &BMEWrite;
-    bme->intf = BME68X_I2C_INTF;
-    bme->delay_us = &BMEDelay;
-    bme->amb_temp = 21;
-    bme->intf_ptr = &g_Instance;
+    g_Instance.m_Impl->read = &BMERead;
+    g_Instance.m_Impl->write = &BMEWrite;
+    g_Instance.m_Impl->intf = BME68X_I2C_INTF;
+    g_Instance.m_Impl->delay_us = &BMEDelay;
+    g_Instance.m_Impl->amb_temp = 21;
+    g_Instance.m_Impl->intf_ptr = &g_Instance;
 
-    if(bme68x_init(bme) != BME68X_OK)
+    if(bme68x_init(g_Instance.m_Impl) != BME68X_OK)
     {
         return false;
     }
 
-    //if(bme68x_selftest_check(bme) != BME68X_OK)
-    //{
-    //    return false;
-    //}
-
-    return true;
+    g_Instance.m_Initialized = true;
+    
+    // Finally, configure it with some sensible defaults
+    return BME680_SetSamplingSettings(&g_DefaultSampling);
 }
 
-bool BME680_Sample(BME680Data* output)
+bool BME680_SelfTest()
+{
+    if(!g_Instance.m_Initialized)
+    {
+        return false;
+    }
+    return bme68x_selftest_check(g_Instance.m_Impl) != BME68X_OK;
+}
+
+bool BME680_SetSamplingSettings(const BME680SamplingSettings* settings)
 {
     if(!g_Instance.m_Initialized)
     {
         return false;
     }
 
-    struct bme68x_dev* bme = (struct bme68x_dev*)g_Instance.m_Impl;
-
-    struct bme68x_conf conf;
-    struct bme68x_heatr_conf heatr_conf;
-    struct bme68x_data data;
-    uint8_t n_fields;
-
-    conf.filter = BME68X_FILTER_OFF;
-    conf.odr = BME68X_ODR_NONE;
-    conf.os_hum = BME68X_OS_16X;
-    conf.os_pres = BME68X_OS_1X;
-    conf.os_temp = BME68X_OS_2X;
-    bme68x_set_conf(&conf, &bme);
-
-    heatr_conf.enable = BME68X_DISABLE;
-    heatr_conf.heatr_temp = 300;
-    heatr_conf.heatr_dur = 100;
-    bme68x_set_heatr_conf(BME68X_FORCED_MODE, &heatr_conf, &bme);
+    // This will configure TPH sampling settings
+    struct bme68x_conf conf = {
+        .filter = BME68X_FILTER_OFF,
+        .odr = BME68X_ODR_NONE,
+        .os_hum = settings->m_HumidityOS,
+        .os_pres = settings->m_PressureOS,
+        .os_temp = settings->m_TemperatureOS,
+    };
+    bme68x_set_conf(&conf, g_Instance.m_Impl);
     
-    bme68x_set_op_mode(BME68X_FORCED_MODE, &bme);
+    // Configure gas heater
+    struct bme68x_heatr_conf heatr_conf = {
+        .enable = settings->m_HeaterEnabled,
+        .heatr_temp = settings->m_HeaterTemperature,
+        .heatr_dur = settings->m_HeaterDuration,
+    };
+    bme68x_set_heatr_conf(BME68X_FORCED_MODE, &heatr_conf, g_Instance.m_Impl);
+    
+    // Cache the delay we will need once we sample the data (accounting for THP and heater)
+    g_Instance.m_SampleDelay = bme68x_get_meas_dur(BME68X_FORCED_MODE, &conf, g_Instance.m_Impl) + (heatr_conf.heatr_dur * 1000);
 
-    uint32_t measDuration = bme68x_get_meas_dur(BME68X_FORCED_MODE, &conf, bme);
+    // Keep in mind that the sensor is in Sleep mode all the time. We will wake it up (FORCED_MODE) right before
+    // sampling the data
+    return true;
+}
 
-    DelayUS(measDuration);
+bool BME680_Sample(BME680Data* output)
+{
+    // Reset all values to an invalid state
+    output->m_Humidity = 0.0f;
+    output->m_Pressure = 0.0f;
+    output->m_Temperature = 0.0f;
+ 
+    if(!g_Instance.m_Initialized)
+    {
+        return false;
+    }
+    
+    // This will wake up the device and start a sampling routine
+    bme68x_set_op_mode(BME68X_FORCED_MODE, g_Instance.m_Impl);
 
-    bme68x_get_data(BME68X_FORCED_MODE, &data, &n_fields, &bme);
+    // Lets wait to make sure the results are ready
+    DelayUS(g_Instance.m_SampleDelay);
+
+    struct bme68x_data sampleData;
+    uint8_t n_fields;
+    bme68x_get_data(BME68X_FORCED_MODE, &sampleData, &n_fields, g_Instance.m_Impl);
 
     if(n_fields)
     {
-        output->m_Humidity = data.humidity;
-        output->m_Temperature = data.temperature;
-        output->m_Pressure = data.pressure;
+        output->m_Humidity = sampleData.humidity;
+        output->m_Temperature = sampleData.temperature;
+        output->m_Pressure = sampleData.pressure;
     }
 
-    return true;
+    return n_fields != 0;
 }

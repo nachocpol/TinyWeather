@@ -12,14 +12,7 @@ typedef struct
     uint8_t m_Addr;
     BME_I2C_Read m_I2CRead;
     BME_I2C_Write m_I2CWrite;
-} BME680Config;
-
-typedef struct
-{
-    BME680Config m_Config;
-    bool m_Initialized;
-    void* m_Impl;
-} BME680Instance;
+} BME680InitSettings;
 
 typedef struct 
 {
@@ -28,7 +21,35 @@ typedef struct
     float m_Pressure;   
 } BME680Data;
 
-bool BME680_Initialize(BME680Config* config);
+enum BME680OSMode
+{
+    OS_0X = 0,
+    OS_1X,
+    OS_2X,
+    OS_4X,
+    OS_8X,
+    OS_16X
+};
+
+typedef struct
+{
+    enum BME680OSMode m_TemperatureOS;
+    enum BME680OSMode m_PressureOS;
+    enum BME680OSMode m_HumidityOS;
+    bool m_HeaterEnabled;
+    uint32_t m_HeaterDuration;
+    uint32_t m_HeaterTemperature;
+} BME680SamplingSettings;
+
+
+// Initializes the BME driver. Checks the chipID and retrieves the calibration
+// parameters. Sampling settings are left as default.
+bool BME680_Initialize(BME680InitSettings* config);
+
+// Performs a self test routine. Returns true if the test passed. False otherwise.
+bool BME680_SelfTest();
+
+bool BME680_SetSamplingSettings(const BME680SamplingSettings* settings);
 
 bool BME680_Sample(BME680Data* output);
 
