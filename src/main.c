@@ -49,6 +49,9 @@ void Initialize()
             DelayMS(2000);
         }
     }
+
+    // Quick test :) 
+    HANDLE_OUTPUT(ESP_ERR_NOT_FOUND);
 }
 
 void Update()

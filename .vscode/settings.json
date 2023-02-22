@@ -6,6 +6,7 @@
         "bme68x_defs.h": "c",
         "array": "c",
         "string": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "esp_netif_net_stack.h": "c"
     }
 }
