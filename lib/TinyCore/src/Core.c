@@ -6,6 +6,7 @@
 #include "esp_netif.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "esp_event.h"
 
 void DelayMS(uint32_t ms)
 {
@@ -25,6 +26,11 @@ bool InitializeSubSystems()
     }
 
     if(!HANDLE_OUTPUT(esp_netif_init()))
+    {
+        return false;
+    }
+
+    if(!HANDLE_OUTPUT(esp_event_loop_create_default()))
     {
         return false;
     }

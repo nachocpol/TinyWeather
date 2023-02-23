@@ -4,6 +4,7 @@
 #include "Core.h"
 #include "I2C.h"
 #include "BME680.h"
+#include "Wifi.h"
 
 static const char* k_LogTag = "Firmware";
 static const char* k_FirmwareVersion = "0.1";
@@ -13,6 +14,10 @@ void Update();
 
 void app_main() 
 {
+    // Flush log and allow Monitor to catch-up
+    ESP_LOGI(k_LogTag, "\n \n"); 
+    DelayMS(5000);
+
     Initialize();
     while(true)
     {
@@ -22,17 +27,28 @@ void app_main()
 
 void Initialize()
 {
-    // Flush log
-    ESP_LOGI(k_LogTag, "\n \n"); 
-
-    DelayMS(5000);
-    
     ESP_LOGI(k_LogTag, "Initializing firmware. Current version is: %s", k_FirmwareVersion);
+
+    InitializeSubSystems();
+
+    I2C_Initialize(NULL);
+
+    if(Wifi_Initialize())
+    {
+        ESP_LOGI(k_LogTag, "Scanning nearby WiFi access points...");
+        uint16_t maxAps = 5;
+        AccessPointInfo aps[maxAps];
+        Wifi_ScanAPs(aps, &maxAps);
+        ESP_LOGI(k_LogTag, "Found: %i APs", maxAps);
+        for(uint16_t i = 0; i < maxAps; ++i)
+        {
+            ESP_LOGI(k_LogTag, "\t %s %i", aps[i].m_SSID, aps[i].m_RSSI);
+        }
+    }
     
     // Led pin
     gpio_set_direction(GPIO_NUM_18, GPIO_MODE_OUTPUT);
 
-    I2C_Initialize(NULL);
 
     // Setup the BME
     BME680InitSettings bmeConfig = {
@@ -49,9 +65,6 @@ void Initialize()
             DelayMS(2000);
         }
     }
-
-    // Quick test :) 
-    HANDLE_OUTPUT(ESP_ERR_NOT_FOUND);
 }
 
 void Update()
