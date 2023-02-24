@@ -5,6 +5,9 @@
 #include "I2C.h"
 #include "BME680.h"
 #include "Wifi.h"
+#include "Util.h"
+
+#include "string.h"
 
 static const char* k_LogTag = "Firmware";
 static const char* k_FirmwareVersion = "0.1";
@@ -42,8 +45,16 @@ void Initialize()
         ESP_LOGI(k_LogTag, "Found: %i APs", maxAps);
         for(uint16_t i = 0; i < maxAps; ++i)
         {
-            ESP_LOGI(k_LogTag, "\t %s %i", aps[i].m_SSID, aps[i].m_RSSI);
+            ESP_LOGI(k_LogTag, "\t %s RSSI:%i  Authm:%i", aps[i].m_SSID, aps[i].m_RSSI, aps[i].m_AuthMode);
         }
+
+        ESP_LOGI(k_LogTag, "Connecting to AP...");
+        AccessPointInfo apInfo = {
+            .m_AuthMode = WPA2_PSK
+        };
+        const char* ssid = "VM2930766";
+        memcpy(apInfo.m_SSID, ssid, strlen(ssid));
+        Wifi_Connect(&apInfo, "yy6nnSmcdgvj");
     }
     
     // Led pin

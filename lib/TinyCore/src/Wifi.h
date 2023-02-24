@@ -27,6 +27,8 @@ typedef struct
 
 bool Wifi_Initialize();
 
+bool Wifi_Connect(AccessPointInfo* info, const char* password);
+
 void Wifi_SmartConfig();
 
 void Wifi_ScanAPs(AccessPointInfo* accessPoints, uint16_t* maxAccessPoints);
