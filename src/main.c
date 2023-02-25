@@ -8,6 +8,7 @@
 #include "Util.h"
 
 #include "string.h"
+#include "sys/socket.h"
 
 static const char* k_LogTag = "Firmware";
 static const char* k_FirmwareVersion = "0.1";
@@ -55,6 +56,12 @@ void Initialize()
         const char* ssid = "VM2930766";
         memcpy(apInfo.m_SSID, ssid, strlen(ssid));
         Wifi_Connect(&apInfo, "yy6nnSmcdgvj");
+
+        while(!Wifi_Connected())
+        {
+            ESP_LOGI(k_LogTag, "Waiting to stablish wifi connection...");
+            DelayMS(250);
+        }
     }
     
     // Led pin
@@ -76,6 +83,52 @@ void Initialize()
             DelayMS(2000);
         }
     }
+
+    // Prototype socket coms
+    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(clientSocket == -1)
+    {
+        ESP_LOGI(k_LogTag, "Failed to crete socket");
+    }
+    else
+    {
+        struct sockaddr_in serverAddr;
+        memset(&serverAddr, 0, sizeof(serverAddr));
+
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(1122);
+
+        if(inet_pton(AF_INET, "192.168.0.17", &serverAddr.sin_addr) <= 0)
+        {
+            ESP_LOGI(k_LogTag, "Failed to convert IP addr");
+        }
+        else
+        {
+            if(connect(clientSocket, (const struct sockadd*)&serverAddr, sizeof(serverAddr)) >= 0)
+            {
+                char data[] = "This is your friend the ESP";
+                if(send(clientSocket, &data, strlen(data), 0) != -1)
+                {
+                    char recData[128];
+                    int numRec = recv(clientSocket, &recData, 128, 0);
+                    if(numRec != -1)
+                    {
+                        ESP_LOGI(k_LogTag, "From server: %s", recData);
+                    }
+                }
+            }
+            else
+            {
+                ESP_LOGI(k_LogTag, "Could not connect to the server");
+            }
+        }
+
+        if(close(clientSocket) == -1)
+        {
+            ESP_LOGI(k_LogTag, "Error while closing the socket");
+        }
+    }
+
 }
 
 void Update()

@@ -12,10 +12,13 @@
 
 #include "string.h"
 
+#define WIFI_CONNECTED_BIT BIT0
+
 typedef struct
 {
     bool m_Initialized;
     uint32_t m_ConnectionRetryCout;
+    EventGroupHandle_t m_Flags;
 } WifiInstance;
 
 WifiInstance g_WifiInstance = {
@@ -35,6 +38,8 @@ void Wifi_EventHandler(void* userData, esp_event_base_t eventBase, int32_t id, v
                 g_WifiInstance.m_ConnectionRetryCout--;
                 esp_wifi_connect();
             }
+
+            xEventGroupClearBits(g_WifiInstance.m_Flags, WIFI_CONNECTED_BIT);
         }
         else
         {
@@ -47,6 +52,8 @@ void Wifi_EventHandler(void* userData, esp_event_base_t eventBase, int32_t id, v
         {
             ip_event_got_ip_t* event = (ip_event_got_ip_t*)data;
             ESP_LOGI("WIFI", "Device IP:" IPSTR, IP2STR(&event->ip_info.ip));
+
+            xEventGroupSetBits(g_WifiInstance.m_Flags, WIFI_CONNECTED_BIT);
         }
         else
         {
@@ -76,6 +83,8 @@ bool Wifi_Initialize()
     HANDLE_OUTPUT_RETURN_FALSE(
         esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Wifi_EventHandler, NULL, NULL)
     );
+
+    g_WifiInstance.m_Flags = xEventGroupCreate();
 
     g_WifiInstance.m_Initialized = true;
 
@@ -150,4 +159,9 @@ void Wifi_ScanAPs(AccessPointInfo* accessPoints, uint16_t* maxAccessPoints)
         accessPoints[i].m_RSSI = scannedAccessPoints[i].rssi;
         accessPoints[i].m_AuthMode = (enum WifiAuthMode)scannedAccessPoints[i].authmode;        
     }
+}
+
+bool Wifi_Connected()
+{
+    return xEventGroupGetBits(g_WifiInstance.m_Flags) & WIFI_CONNECTED_BIT;
 }

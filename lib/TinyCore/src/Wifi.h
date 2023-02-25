@@ -33,4 +33,6 @@ void Wifi_SmartConfig();
 
 void Wifi_ScanAPs(AccessPointInfo* accessPoints, uint16_t* maxAccessPoints);
 
+bool Wifi_Connected();
+
 #endif
