@@ -6,6 +6,7 @@
 #include "BME680.h"
 #include "Wifi.h"
 #include "Util.h"
+#include "Packets.h"
 
 #include "string.h"
 #include "sys/socket.h"
@@ -83,8 +84,19 @@ void Initialize()
             DelayMS(2000);
         }
     }
+}
 
-    // Prototype socket coms
+void SendData(BME680Data* sourceData)
+{
+    DataPacket packet = {
+        .m_Magic = k_Magic,
+        .m_Type = DATA,
+        .m_Version = k_DataPacketVersion,
+        .m_Temperature = sourceData->m_Temperature,
+        .m_Humidity = sourceData->m_Humidity,
+        .m_Pressure = sourceData->m_Pressure,
+    };
+
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if(clientSocket == -1)
     {
@@ -106,15 +118,9 @@ void Initialize()
         {
             if(connect(clientSocket, (const struct sockadd*)&serverAddr, sizeof(serverAddr)) >= 0)
             {
-                char data[] = "This is your friend the ESP";
-                if(send(clientSocket, &data, strlen(data), 0) != -1)
+                if(send(clientSocket, &packet, sizeof(packet), 0) != -1)
                 {
-                    char recData[128];
-                    int numRec = recv(clientSocket, &recData, 128, 0);
-                    if(numRec != -1)
-                    {
-                        ESP_LOGI(k_LogTag, "From server: %s", recData);
-                    }
+                    // Done.
                 }
             }
             else
@@ -128,15 +134,14 @@ void Initialize()
             ESP_LOGI(k_LogTag, "Error while closing the socket");
         }
     }
-
 }
 
 void Update()
 {
     gpio_set_level(GPIO_NUM_18, 1);
-    DelayMS(500);
+    DelayMS(1000);
     gpio_set_level(GPIO_NUM_18, 0);
-    DelayMS(500);
+    DelayMS(1000);
 
     BME680Data bmeData;
     if(!BME680_Sample(&bmeData))
@@ -149,5 +154,6 @@ void Update()
                 "Temperature: %f (C) Humidity: %f Pressure: %f (Pa)",
                 bmeData.m_Temperature,bmeData.m_Humidity, bmeData.m_Pressure
         );
+        SendData(&bmeData);
     }
 }
