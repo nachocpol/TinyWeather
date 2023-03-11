@@ -1,6 +1,8 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 
+#include "esp_http_client.h"
+
 #include "Core.h"
 #include "I2C.h"
 #include "BME680.h"
@@ -9,7 +11,6 @@
 #include "Packets.h"
 
 #include "string.h"
-#include "sys/socket.h"
 
 static const char* k_LogTag = "Firmware";
 static const char* k_FirmwareVersion = "0.1";
@@ -97,42 +98,41 @@ void SendData(BME680Data* sourceData)
         .m_Pressure = sourceData->m_Pressure,
     };
 
-    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if(clientSocket == -1)
-    {
-        ESP_LOGI(k_LogTag, "Failed to crete socket");
-    }
-    else
-    {
-        struct sockaddr_in serverAddr;
-        memset(&serverAddr, 0, sizeof(serverAddr));
+    char postData[300];
+    sprintf(
+        postData, 
+        "{ magic : %u, temperature: %f}",
+        k_Magic, sourceData->m_Temperature
+    );
 
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(1122);
+    const char* port = "3000";
+    const char* ip = "192.168.0.30";
 
-        if(inet_pton(AF_INET, "192.168.0.17", &serverAddr.sin_addr) <= 0)
+    char url[128];
+    sprintf(url, "http://%s:%s/data", ip, port);
+
+    esp_http_client_config_t clientConfig = {
+        .url = url
+    };
+    esp_http_client_handle_t  client = esp_http_client_init(&clientConfig);
+    if(client != NULL)
+    {
+        esp_http_client_set_method(client, HTTP_METHOD_POST);
+        esp_http_client_set_header(client, "Content-Type", "application/json");
+        if(esp_http_client_open(client, strlen(postData)) == ESP_OK)
         {
-            ESP_LOGI(k_LogTag, "Failed to convert IP addr");
+            esp_http_client_write(client, postData, strlen(postData));
+            esp_http_client_close(client);
         }
         else
         {
-            if(connect(clientSocket, (const struct sockadd*)&serverAddr, sizeof(serverAddr)) >= 0)
-            {
-                if(send(clientSocket, &packet, sizeof(packet), 0) != -1)
-                {
-                    // Done.
-                }
-            }
-            else
-            {
-                ESP_LOGI(k_LogTag, "Could not connect to the server");
-            }
+            ESP_LOGE(k_LogTag, "Failed to open http client");
         }
-
-        if(close(clientSocket) == -1)
-        {
-            ESP_LOGI(k_LogTag, "Error while closing the socket");
-        }
+        esp_http_client_cleanup(client);
+    }
+    else
+    {
+        ESP_LOGE(k_LogTag, "Could not initialize the http client");
     }
 }
 
