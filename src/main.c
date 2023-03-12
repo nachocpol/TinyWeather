@@ -8,7 +8,9 @@
 #include "BME680.h"
 #include "Wifi.h"
 #include "Util.h"
+
 #include "Packets.h"
+#include "JSONHelper.h"
 
 #include "string.h"
 
@@ -89,21 +91,28 @@ void Initialize()
 
 void SendData(BME680Data* sourceData)
 {
-    DataPacket packet = {
-        .m_Magic = k_Magic,
-        .m_Type = DATA,
-        .m_Version = k_DataPacketVersion,
-        .m_Temperature = sourceData->m_Temperature,
-        .m_Humidity = sourceData->m_Humidity,
-        .m_Pressure = sourceData->m_Pressure,
-    };
+    if(sourceData == NULL)
+    {
+        return;
+    }
 
-    char postData[300];
-    sprintf(
-        postData, 
-        "{ magic : %u, temperature: %f}",
-        k_Magic, sourceData->m_Temperature
-    );
+    JSONObject* json = JSON_CreateObject(300);
+
+    ESP_LOGI(k_LogTag, "%i", (int)json->m_DataSize);
+
+    JSON_BeginObject(json);
+    {
+        JSON_AddProperty_U8(json, "magic", k_Magic);
+        JSON_AddProperty_U8(json, "version", k_DataPacketVersion);
+        JSON_AddProperty_Float(json, "temperature", sourceData->m_Temperature);
+        JSON_AddProperty_Float(json, "pressure", sourceData->m_Pressure);
+        JSON_AddProperty_Float(json, "humidity", sourceData->m_Humidity);
+    }
+    JSON_EndObject(json);
+ 
+    ESP_LOGI(k_LogTag, "%s", json->m_RawData);
+
+    json->m_RawData[json->m_DataSize] = 0;
 
     const char* port = "3000";
     const char* ip = "192.168.0.30";
@@ -119,9 +128,9 @@ void SendData(BME680Data* sourceData)
     {
         esp_http_client_set_method(client, HTTP_METHOD_POST);
         esp_http_client_set_header(client, "Content-Type", "application/json");
-        if(esp_http_client_open(client, strlen(postData)) == ESP_OK)
+        if(esp_http_client_open(client, json->m_DataPosition + 1) == ESP_OK)
         {
-            esp_http_client_write(client, postData, strlen(postData));
+            esp_http_client_write(client, json->m_RawData, json->m_DataPosition + 1);
             esp_http_client_close(client);
         }
         else
