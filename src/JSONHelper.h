@@ -8,15 +8,15 @@ typedef struct
     char* m_RawData;
     uint32_t m_DataSize;
     uint32_t m_DataPosition;
-}JSONObject;
+}JSONWriter;
 
-JSONObject* JSON_CreateObject(uint32_t maxSize);
-void JSON_ReleaseObject(JSONObject* object);
+JSONWriter* JSON_CreateWriter(uint32_t maxSize);
+void JSON_ReleaseWriter(JSONWriter* object);
 
 void JSON_BeginObject();
-void JSON_EndObject(JSONObject* object);
+void JSON_EndObject(JSONWriter* object);
 
-void JSON_AddProperty_Float(JSONObject* object, const char* name, float value);
-void JSON_AddProperty_U8(JSONObject* object, const char* name, uint8_t value);
+void JSON_AddProperty_Float(JSONWriter* object, const char* name, float value);
+void JSON_AddProperty_U8(JSONWriter* object, const char* name, uint8_t value);
 
 #endif

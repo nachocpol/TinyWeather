@@ -2,16 +2,16 @@
 
 #include <stdio.h>
 
-JSONObject* JSON_CreateObject(uint32_t maxSize)
+JSONWriter* JSON_CreateWriter(uint32_t maxSize)
 {
-    JSONObject* object = malloc(sizeof(JSONObject));
+    JSONWriter* object = malloc(sizeof(JSONWriter));
     object->m_RawData = malloc(maxSize);
     object->m_DataSize = maxSize;
     object->m_DataPosition = 0;
     return object;
 }
 
-void JSON_ReleaseObject(JSONObject* object)
+void JSON_ReleaseWriter(JSONWriter* object)
 {
     if(object == NULL)
     {
@@ -22,25 +22,26 @@ void JSON_ReleaseObject(JSONObject* object)
     object = NULL;
 }
 
-void JSON_BeginObject(JSONObject* object)
+void JSON_BeginObject(JSONWriter* object)
 {
     char* pData = object->m_RawData + object->m_DataPosition;
     object->m_DataPosition += sprintf(pData,"{");
 }
 
-void JSON_EndObject(JSONObject* object)
+void JSON_EndObject(JSONWriter* object)
 {
     uint32_t writePos = object->m_DataPosition;
     // A bit of a hack... We fixup the comma inserted by last property (if any)
     if(object->m_RawData[writePos - 1] == ',')
     {
         --writePos;
+        --object->m_DataPosition; // Also reduce size of the string
     }
     char* pData = object->m_RawData + writePos;
     object->m_DataPosition += sprintf(pData,"}"); // Do we really need a sprintf...???
 }
 
-void JSON_AddProperty_Float(JSONObject* object, const char* name, float value)
+void JSON_AddProperty_Float(JSONWriter* object, const char* name, float value)
 {
     if(object == NULL)
     {
@@ -50,7 +51,7 @@ void JSON_AddProperty_Float(JSONObject* object, const char* name, float value)
     object->m_DataPosition += sprintf(pData,"\"%s\" : %f,", name, value);
 }
 
-void JSON_AddProperty_U8(JSONObject* object, const char* name, uint8_t value)
+void JSON_AddProperty_U8(JSONWriter* object, const char* name, uint8_t value)
 {
     if(object == NULL)
     {

@@ -96,10 +96,8 @@ void SendData(BME680Data* sourceData)
         return;
     }
 
-    JSONObject* json = JSON_CreateObject(300);
-
-    ESP_LOGI(k_LogTag, "%i", (int)json->m_DataSize);
-
+    // Setup the JSON raw data we will be sending the server
+    JSONWriter* json = JSON_CreateWriter(300);
     JSON_BeginObject(json);
     {
         JSON_AddProperty_U8(json, "magic", k_Magic);
@@ -109,28 +107,27 @@ void SendData(BME680Data* sourceData)
         JSON_AddProperty_Float(json, "humidity", sourceData->m_Humidity);
     }
     JSON_EndObject(json);
- 
-    ESP_LOGI(k_LogTag, "%s", json->m_RawData);
+    
+    const uint32_t numBytesToWrite = json->m_DataPosition;
 
-    json->m_RawData[json->m_DataSize] = 0;
-
-    const char* port = "3000";
-    const char* ip = "192.168.0.30";
-
+    // Build URL
     char url[128];
+    const char* ip = "192.168.0.30";
+    const char* port = "3000";
     sprintf(url, "http://%s:%s/data", ip, port);
 
     esp_http_client_config_t clientConfig = {
         .url = url
     };
+    
     esp_http_client_handle_t  client = esp_http_client_init(&clientConfig);
     if(client != NULL)
     {
         esp_http_client_set_method(client, HTTP_METHOD_POST);
         esp_http_client_set_header(client, "Content-Type", "application/json");
-        if(esp_http_client_open(client, json->m_DataPosition + 1) == ESP_OK)
+        if(esp_http_client_open(client, numBytesToWrite) == ESP_OK)
         {
-            esp_http_client_write(client, json->m_RawData, json->m_DataPosition + 1);
+            esp_http_client_write(client, json->m_RawData, numBytesToWrite);
             esp_http_client_close(client);
         }
         else
@@ -143,6 +140,8 @@ void SendData(BME680Data* sourceData)
     {
         ESP_LOGE(k_LogTag, "Could not initialize the http client");
     }
+
+    JSON_ReleaseWriter(json);
 }
 
 void Update()
