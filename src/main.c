@@ -17,6 +17,9 @@
 static const char* k_LogTag = "Firmware";
 static const char* k_FirmwareVersion = "0.1";
 
+extern const char certStart[] asm("_binary_influxCert_pem_start");
+extern const char certEnd[]   asm("_binary_influxCert_pem_end");
+
 void Initialize();
 void Update();
 
@@ -96,6 +99,8 @@ void SendData(BME680Data* sourceData)
         return;
     }
 
+#if 0
+
     // Setup the JSON raw data we will be sending the server
     JSONWriter* json = JSON_CreateWriter(300);
     JSON_BeginObject(json);
@@ -142,6 +147,102 @@ void SendData(BME680Data* sourceData)
     }
 
     JSON_ReleaseWriter(json);
+#else
+
+    const char* influxToken = "fIxFBU3Stsi6cz0VpcgMAH6xyRE97lpk5NLWtKqurBeaXFCgWY2WFpHjrBy1H5JHhGxTuCWCazcLKuKequQrFw==";
+    const char* influxBucket = "WeatherDB";
+    const char* influxOrg = "TinyWeather";
+    const char* influxEndpoint = "https://eu-central-1-1.aws.cloud2.influxdata.com";
+
+    char data[100] = {};
+    sprintf(
+        data, 
+        "weatherData temperature=%.2f,humidity=%.2f,pressure=%.2f", 
+        sourceData->m_Temperature, sourceData->m_Humidity, sourceData->m_Pressure
+    );
+
+    ESP_LOGI(k_LogTag, "Sending data:%s", data);
+
+    char url[150] = {};
+    sprintf(
+        url, 
+        "%s/api/v2/write?org=%s&bucket=%s&precision=s",
+        influxEndpoint, influxOrg, influxBucket
+    );
+
+
+    esp_http_client_config_t  config = {
+        .url = url,
+        .cert_pem = certStart,
+    };
+
+    /*
+    curl --request POST \
+    "http://localhost:8086/api/v2/write?org=YOUR_ORG&bucket=YOUR_BUCKET&precision=ns" \
+        --header "Authorization: Token YOUR_API_TOKEN" \
+        --header "Content-Type: text/plain; charset=utf-8" \
+        --header "Accept: application/json" \
+        --data-binary '
+            airSensors,sensor_id=TLM0201 temperature=73.97038159354763,humidity=35.23103248356096,co=0.48445310567793615 1630424257000000000
+            airSensors,sensor_id=TLM0202 temperature=75.30007505999716,humidity=35.651929918691714,co=0.5141876544505826 1630424257000000000
+        '
+    */
+   char tokenStr[180] = {};
+   sprintf(tokenStr, "Token %s", influxToken);
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+
+    {
+        esp_http_client_set_method(client, HTTP_METHOD_POST);
+        esp_http_client_set_url(client, url);
+        esp_http_client_set_header(client, "Authorization", tokenStr);
+        esp_http_client_set_header(client, "Content-Type", "text/plain; charset=utf-8");
+        esp_http_client_set_header(client, "Accept", "tapplication/json");
+        esp_err_t result = esp_http_client_open(client, strlen(data));
+        if(result != ESP_OK)
+        {
+            ESP_LOGI(k_LogTag, "Failed to open http client");
+        }
+        else
+        {
+            // ESP_LOGI(k_LogTag, "Http client opened!");
+            int wlen = esp_http_client_write(client, data, strlen(data));
+            if(wlen < 0)
+            {
+                ESP_LOGI(k_LogTag, "Failed to write data to http client");
+            }
+            int contentLength = esp_http_client_fetch_headers(client);
+            if(contentLength < 0)
+            {
+                ESP_LOGI(k_LogTag, "Failed to fetch headers");
+            }
+            else
+            {
+                char reponseData[300];
+                int dataRead = esp_http_client_read_response(client, reponseData, 300);
+                if(dataRead >= 0)
+                {
+                    int response = esp_http_client_get_status_code(client);
+                    if(response != 201)
+                    {
+                        ESP_LOGI(k_LogTag, "Server response: %i", response);
+                        ESP_LOGI(
+                            k_LogTag, "HTTP POST Status = %d, content_length = %"PRIu64,
+                            esp_http_client_get_status_code(client),
+                            esp_http_client_get_content_length(client)
+                        );
+                        ESP_LOGI(k_LogTag, "%s", reponseData);
+                    }
+                }
+                else
+                {
+                    ESP_LOGI(k_LogTag, "Failed to read response");
+                }
+            }
+        }
+    }
+    esp_http_client_cleanup(client);
+#endif
 }
 
 void Update()
